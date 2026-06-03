@@ -1,0 +1,116 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net (Rule 1 of global rules)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper Functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // MANDATORY: Mandate that the user is verified using request.auth.token.email_verified
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isVerifiedUser() && request.auth.uid == userId;
+    }
+
+    // Prevent Resource Poisoning from spoofed/invalid path variable IDs
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Validation Blueprint for Story Creation (Anti-Update-Gap)
+    function isValidStoryCreate(data) {
+      return data.keys().hasAll(['userId', 'title', 'selections', 'result', 'createdAt']) &&
+             data.keys().size() == 5 &&
+             data.userId is string &&
+             data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.title is string &&
+             data.title.size() <= 256 &&
+             data.result is string &&
+             data.result.size() <= 65536 &&
+             data.selections is map &&
+             data.createdAt == request.time;
+    }
+
+    // Validation Blueprint for Story Updates
+    function isValidStoryUpdate(data) {
+      return data.keys().hasAll(['userId', 'title', 'selections', 'result', 'createdAt']) &&
+             data.keys().size() == 5 &&
+             data.userId is string &&
+             data.userId.size() <= 128 &&
+             data.userId == request.auth.uid &&
+             data.title is string &&
+             data.title.size() <= 256 &&
+             data.result is string &&
+             data.result.size() <= 65536 &&
+             data.selections is map &&
+             data.createdAt == resource.data.createdAt; // IMMUTABILITY: createdAt can never change after creation
+    }
+
+    // Validation Blueprint for User Config (Anti-Update-Gap)
+    function isValidUserConfig(data) {
+      return data.keys().hasAll(['geminiApiKey', 'updatedAt']) &&
+             data.keys().size() == 2 &&
+             data.geminiApiKey is string &&
+             data.geminiApiKey.size() <= 200 &&
+             data.updatedAt == request.time;
+    }
+
+    // Rules for Stories
+    match /stories/{storyId} {
+      allow get: if isVerifiedUser() && 
+                  isValidId(storyId) &&
+                  resource.data.userId == request.auth.uid;
+                  
+      // Secure List Queries (The "Query Enforcer")
+      allow list: if isVerifiedUser() && 
+                   resource.data.userId == request.auth.uid;
+                   
+      allow create: if isVerifiedUser() && 
+                    isValidId(storyId) && 
+                    isValidStoryCreate(request.resource.data);
+                    
+      // Action-Based Update Pattern (Pillar 5)
+      allow update: if isVerifiedUser() && 
+                    isValidId(storyId) && 
+                    resource.data.userId == request.auth.uid && 
+                    isValidStoryUpdate(request.resource.data) && (
+                      // Action: Edit Script
+                      (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['result']))
+                    );
+                    
+      allow delete: if isVerifiedUser() && 
+                    isValidId(storyId) && 
+                    resource.data.userId == request.auth.uid;
+    }
+
+    // Rules for User Configurations
+    match /user_configs/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow create, update: if isOwner(userId) && 
+                            isValidId(userId) && 
+                            isValidUserConfig(request.resource.data);
+      allow delete: if isOwner(userId) && isValidId(userId);
+    }
+
+    // Rules for Payments (Mayar.id Integration)
+    match /payments/{email} {
+      allow get: if isSignedIn() &&
+                  request.auth.token.email != null &&
+                  request.auth.token.email.lower() == email.lower();
+      allow create, update: if isSignedIn() &&
+                            request.auth.token.email != null &&
+                            request.auth.token.email.lower() == email.lower();
+      allow delete: if false;
+    }
+  }
+}

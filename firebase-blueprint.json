@@ -1,0 +1,37 @@
+{
+  "entities": {
+    "StoryHistory": {
+      "title": "Story History",
+      "description": "Stores the generated story sequences for users.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who generated the story." },
+        "title": { "type": "string", "description": "A short title for the story." },
+        "selections": { "type": "object", "description": "The selections used to generate the story." },
+        "result": { "type": "string", "description": "The generated story content." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the story was generated." }
+      },
+      "required": ["userId", "selections", "result", "createdAt"]
+    },
+    "UserConfig": {
+      "title": "User Config",
+      "description": "Private user configurations including their browser-based Gemini API key.",
+      "type": "object",
+      "properties": {
+        "geminiApiKey": { "type": "string", "description": "The user's private Gemini API key." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the configuration was last updated." }
+      },
+      "required": ["geminiApiKey", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/stories/{storyId}": {
+      "schema": "StoryHistory",
+      "description": "Collection of generated stories."
+    },
+    "/user_configs/{userId}": {
+      "schema": "UserConfig",
+      "description": "Private configurations for users."
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "NexoraAI Talking Object 3D Pro",
+  "description": "Create cute 3D animated educational object prompts for short-form videos with Pixar-style visuals and cinematic storytelling.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
